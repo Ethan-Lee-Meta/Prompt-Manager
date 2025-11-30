@@ -1,11 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { StoreProvider, useStore } from './hooks/useStore';
-import { analyzeImageForTags, suggestConnections } from './services/geminiService';
+import { analyzeImageForTags, suggestConnections, isAiEnabled } from './services/geminiService';
 import NetworkGraph from './components/NetworkGraph';
 import EntityModal from './components/EntityModal';
 import { 
   Search, Plus, Image as ImageIcon, Upload, Mic, Settings, 
-  LayoutGrid, Network, Layers, Sparkles 
+  LayoutGrid, Network, Layers, Sparkles, Camera, WifiOff, Zap
 } from 'lucide-react';
 import { Entity, EntityType } from './types';
 import { v4 as uuidv4 } from 'uuid';
@@ -16,6 +16,10 @@ const MainLayout = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedEntityId, setSelectedEntityId] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isImageSearching, setIsImageSearching] = useState(false);
+  
+  const aiAvailable = isAiEnabled();
+  const imageSearchInputRef = useRef<HTMLInputElement>(null);
 
   // Filtered Data
   const filteredData = searchQuery ? searchEntities(searchQuery) : entities;
@@ -34,13 +38,15 @@ const MainLayout = () => {
       reader.onloadend = async () => {
         const base64 = reader.result as string;
         
-        // 1. Analyze with Gemini
-        let analysis;
-        try {
-            analysis = await analyzeImageForTags(base64);
-        } catch (err) {
-            console.error(err);
-            analysis = { title: file.name, tags: ['image'], description: '' };
+        let analysis = { title: file.name, tags: [] as string[], description: '' };
+        
+        // Only attempt AI analysis if available
+        if (aiAvailable) {
+            try {
+                analysis = await analyzeImageForTags(base64);
+            } catch (err) {
+                console.warn("Analysis failed, using default", err);
+            }
         }
 
         const newId = uuidv4();
@@ -58,17 +64,21 @@ const MainLayout = () => {
         };
         addEntity(newEntity);
 
-        // 3. Auto-connect suggestions
-        try {
-            const allTitles = entities.map(e => e.title);
-            const relatedTitles = await suggestConnections(newEntity.title, newEntity.content || '', allTitles);
-            
-            relatedTitles.forEach(title => {
-                const target = entities.find(e => e.title === title);
-                if (target) linkEntities(newId, target.id);
-            });
-        } catch(err) { console.error("Auto-link failed", err); }
+        // 3. Auto-connect suggestions (Only if AI available)
+        if (aiAvailable) {
+             try {
+                const allTitles = entities.map(e => e.title);
+                const relatedTitles = await suggestConnections(newEntity.title, newEntity.content || '', allTitles);
+                
+                relatedTitles.forEach(title => {
+                    const target = entities.find(e => e.title === title);
+                    if (target) linkEntities(newId, target.id);
+                });
+            } catch(err) { console.error("Auto-link failed", err); }
+        }
 
+        // Open modal immediately for user to review/edit
+        setSelectedEntityId(newId);
       };
       reader.readAsDataURL(file);
     } catch (err) {
@@ -76,25 +86,56 @@ const MainLayout = () => {
       alert("Error processing image");
     } finally {
       setIsProcessing(false);
+      // Reset input
+      if (e.target) e.target.value = '';
     }
   };
 
+  const handleImageSearch = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+
+      if (!aiAvailable) {
+          alert("Image search requires an API Key.");
+          return;
+      }
+
+      setIsImageSearching(true);
+      try {
+        const reader = new FileReader();
+        reader.onloadend = async () => {
+             const base64 = reader.result as string;
+             // We reuse analyzeImageForTags to get keywords from the uploaded search image
+             const analysis = await analyzeImageForTags(base64);
+             
+             // Construct a search query from tags and title
+             const queryParts = [analysis.title, ...analysis.tags.slice(0, 3)];
+             const query = queryParts.join(' ');
+             setSearchQuery(query);
+             setIsImageSearching(false);
+        };
+        reader.readAsDataURL(file);
+      } catch (err) {
+          console.error(err);
+          setIsImageSearching(false);
+      }
+  };
+
   const handleCreatePrompt = () => {
-      const title = prompt("Enter Prompt Title:");
-      if(!title) return;
-      const content = prompt("Enter Prompt Text:");
-      if(!content) return;
-      
+      // Use standard browser prompt for simplicity, but in a real app use a modal
+      // Since we have an editable modal now, we can just create a shell and open it
+      const newId = uuidv4();
       const newEntity: Entity = {
-          id: uuidv4(),
+          id: newId,
           type: 'prompt',
-          title,
-          content,
-          tags: ['manual'],
+          title: 'New Prompt',
+          content: '',
+          tags: ['draft'],
           createdAt: new Date().toISOString(),
           relatedIds: []
       };
       addEntity(newEntity);
+      setSelectedEntityId(newId);
   };
 
   return (
@@ -132,14 +173,14 @@ const MainLayout = () => {
              <div className="relative group w-full">
                 <input 
                     type="file" 
-                    className="absolute inset-0 opacity-0 cursor-pointer w-full"
+                    className="absolute inset-0 opacity-0 cursor-pointer w-full z-10"
                     accept="image/*"
                     onChange={handleFileUpload}
                     disabled={isProcessing}
                 />
                 <button className={`flex items-center justify-center gap-2 w-full py-3 rounded-lg font-medium transition-colors ${isProcessing ? 'bg-slate-700 cursor-wait' : 'bg-blue-600 hover:bg-blue-500 text-white'}`}>
                     {isProcessing ? <Sparkles className="animate-spin" size={20} /> : <Upload size={20} />}
-                    <span className="hidden md:inline">{isProcessing ? 'Analyzing...' : 'Import Asset'}</span>
+                    <span className="hidden md:inline">{isProcessing ? (aiAvailable ? 'Analyzing...' : 'Importing...') : 'Import Asset'}</span>
                 </button>
              </div>
              <button onClick={handleCreatePrompt} className="mt-2 flex items-center justify-center gap-2 w-full py-3 rounded-lg font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors">
@@ -154,20 +195,51 @@ const MainLayout = () => {
         
         {/* Header */}
         <header className="h-16 border-b border-slate-800 flex items-center px-6 justify-between bg-slate-900/50 backdrop-blur">
-             <div className="flex items-center bg-slate-800 rounded-full px-4 py-2 w-96 border border-slate-700 focus-within:border-blue-500 transition-colors">
-                <Search size={18} className="text-slate-500 mr-2" />
-                <input 
-                    type="text" 
-                    placeholder="Search prompts, characters, tags..." 
-                    className="bg-transparent border-none outline-none text-sm w-full text-white placeholder-slate-500"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                />
+             <div className="flex items-center gap-2 flex-1 max-w-xl">
+                 <div className="flex items-center bg-slate-800 rounded-full px-4 py-2 w-full border border-slate-700 focus-within:border-blue-500 transition-colors relative">
+                    <Search size={18} className="text-slate-500 mr-2" />
+                    <input 
+                        type="text" 
+                        placeholder={isImageSearching ? "Analyzing image..." : "Search prompts, characters..."}
+                        className="bg-transparent border-none outline-none text-sm w-full text-white placeholder-slate-500"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        disabled={isImageSearching}
+                    />
+                    
+                    {/* Image Search Button */}
+                    <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                        <input 
+                            ref={imageSearchInputRef}
+                            type="file" 
+                            accept="image/*" 
+                            className="hidden" 
+                            onChange={handleImageSearch}
+                        />
+                        <button 
+                            onClick={() => {
+                                if (!aiAvailable) {
+                                    alert("Enable AI (API Key) to search by image.");
+                                    return;
+                                }
+                                imageSearchInputRef.current?.click();
+                            }}
+                            className={`p-1.5 rounded-full transition-colors ${
+                                isImageSearching ? 'text-blue-400 animate-pulse' : 
+                                aiAvailable ? 'text-slate-400 hover:text-white hover:bg-slate-700' : 'text-slate-600 cursor-not-allowed'
+                            }`}
+                            title={aiAvailable ? "Search by Image" : "Image Search requires API Key"}
+                        >
+                            <Camera size={16} />
+                        </button>
+                    </div>
+                 </div>
              </div>
-             <div className="flex items-center gap-4">
-                 <div className="text-right hidden sm:block">
-                     <p className="text-xs text-slate-500">Local Environment</p>
-                     <p className="text-sm font-bold text-slate-300">Workspace Alpha</p>
+
+             <div className="flex items-center gap-4 ml-4">
+                 <div className={`flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold border ${aiAvailable ? 'bg-green-500/10 text-green-400 border-green-500/20' : 'bg-slate-700/50 text-slate-400 border-slate-700'}`}>
+                    {aiAvailable ? <Zap size={12} fill="currentColor" /> : <WifiOff size={12} />}
+                    {aiAvailable ? 'AI ENABLED' : 'LOCAL MODE'}
                  </div>
                  <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-500 to-purple-500"></div>
              </div>
@@ -211,6 +283,12 @@ const MainLayout = () => {
                             </div>
                         </div>
                     ))}
+                    {filteredData.length === 0 && (
+                        <div className="col-span-full flex flex-col items-center justify-center h-64 text-slate-500">
+                             <Search size={48} className="mb-4 opacity-20" />
+                             <p>No assets found matching "{searchQuery}"</p>
+                        </div>
+                    )}
                 </div>
             )}
 
@@ -251,6 +329,7 @@ const MainLayout = () => {
                         <div className="text-center py-20 text-slate-500">
                             <Layers size={48} className="mx-auto mb-4 opacity-50"/>
                             <p>No projects found. Create a project entity to start grouping assets.</p>
+                            <button onClick={handleCreatePrompt} className="mt-4 text-blue-400 hover:underline">Create a new Project (Prompt)</button>
                         </div>
                     )}
                 </div>
