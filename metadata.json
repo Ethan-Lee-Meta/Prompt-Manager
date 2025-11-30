@@ -1,0 +1,5 @@
+{
+  "name": "Nexus Creative Asset Manager",
+  "description": "A comprehensive local-first asset management system for GenAI workflows. It organizes prompts, images, videos, and characters using a relational knowledge graph, featuring AI-powered search and project aggregation.",
+  "requestFramePermissions": []
+}
