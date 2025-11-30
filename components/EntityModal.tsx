@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Entity } from '../types';
 import { useStore } from '../hooks/useStore';
-import { X, Link, Image as ImageIcon, Film, FileText, User, Edit2, Save, Trash2 } from 'lucide-react';
+import { X, Link, Image as ImageIcon, Film, FileText, User, Edit2, Save, Trash2, Plus } from 'lucide-react';
 
 interface EntityModalProps {
   entityId: string | null;
@@ -80,11 +80,15 @@ const EntityModal: React.FC<EntityModalProps> = ({ entityId, onClose }) => {
                 <span className="uppercase text-xs font-bold tracking-wider">{entity.type}</span>
              </div>
              <div className="flex gap-2">
-                 <button onClick={() => isEditing ? handleSave() : setIsEditing(true)} className={`p-2 rounded-full transition-colors ${isEditing ? 'bg-green-600 text-white hover:bg-green-500' : 'text-slate-400 hover:text-white hover:bg-slate-700'}`}>
+                 <button 
+                    onClick={() => isEditing ? handleSave() : setIsEditing(true)} 
+                    className={`p-2 rounded-full transition-colors ${isEditing ? 'bg-green-600 text-white hover:bg-green-500' : 'text-slate-400 hover:text-white hover:bg-slate-700'}`}
+                    title={isEditing ? "Save Changes" : "Edit Details"}
+                 >
                      {isEditing ? <Save size={18} /> : <Edit2 size={18} />}
                  </button>
                  {!isEditing && (
-                     <button onClick={handleDelete} className="p-2 rounded-full text-slate-400 hover:text-red-400 hover:bg-slate-700 transition-colors">
+                     <button onClick={handleDelete} className="p-2 rounded-full text-slate-400 hover:text-red-400 hover:bg-slate-700 transition-colors" title="Delete Asset">
                         <Trash2 size={18} />
                      </button>
                  )}
@@ -100,6 +104,7 @@ const EntityModal: React.FC<EntityModalProps> = ({ entityId, onClose }) => {
                  value={editTitle} 
                  onChange={e => setEditTitle(e.target.value)}
                  className="text-3xl font-bold text-white mb-4 bg-slate-900 border border-slate-600 rounded px-2 py-1 w-full focus:border-blue-500 outline-none"
+                 placeholder="Asset Title"
                />
            ) : (
                <h2 className="text-3xl font-bold text-white mb-4">{entity.title}</h2>
@@ -107,7 +112,7 @@ const EntityModal: React.FC<EntityModalProps> = ({ entityId, onClose }) => {
            
            
            {entity.mediaUrl && (
-               <div className="mb-6 rounded-lg overflow-hidden border border-slate-600 bg-black max-h-[400px] flex items-center justify-center">
+               <div className="mb-6 rounded-lg overflow-hidden border border-slate-600 bg-black max-h-[400px] flex items-center justify-center relative group">
                    {entity.type === 'video' ? (
                        <img src={entity.mediaUrl} alt="Video Thumbnail" className="max-h-full max-w-full opacity-80" />
                    ) : (
@@ -117,16 +122,17 @@ const EntityModal: React.FC<EntityModalProps> = ({ entityId, onClose }) => {
            )}
            
            <div className="space-y-4 flex-1">
-               <div className="bg-slate-900/50 p-4 rounded-lg border border-slate-700">
+               <div className={`p-4 rounded-lg border transition-colors ${isEditing ? 'bg-slate-900 border-blue-500/50' : 'bg-slate-900/50 border-slate-700'}`}>
                    <h3 className="text-sm font-semibold text-slate-400 mb-2">Content / Description</h3>
                    {isEditing ? (
                        <textarea 
                          value={editContent}
                          onChange={e => setEditContent(e.target.value)}
-                         className="w-full h-32 bg-slate-800 text-slate-200 border border-slate-600 rounded p-2 text-sm focus:border-blue-500 outline-none"
+                         className="w-full h-32 bg-slate-800 text-slate-200 border border-slate-600 rounded p-2 text-sm focus:border-blue-500 outline-none resize-none"
+                         placeholder="Add a description, prompt, or notes..."
                        />
                    ) : (
-                       <p className="text-slate-200 whitespace-pre-wrap">{entity.content || <span className="italic text-slate-600">No content added.</span>}</p>
+                       <p className="text-slate-200 whitespace-pre-wrap leading-relaxed">{entity.content || <span className="italic text-slate-600">No content added. Click edit to add details.</span>}</p>
                    )}
                </div>
                
@@ -137,13 +143,13 @@ const EntityModal: React.FC<EntityModalProps> = ({ entityId, onClose }) => {
                          type="text"
                          value={editTags}
                          onChange={e => setEditTags(e.target.value)}
-                         placeholder="Comma separated tags..."
+                         placeholder="cyberpunk, character, dark (comma separated)"
                          className="w-full bg-slate-800 text-slate-200 border border-slate-600 rounded p-2 text-sm focus:border-blue-500 outline-none"
                        />
                    ) : (
                        <div className="flex flex-wrap gap-2">
                            {entity.tags.map(tag => (
-                               <span key={tag} className="px-3 py-1 bg-slate-700 rounded-full text-xs text-slate-300">#{tag}</span>
+                               <span key={tag} className="px-3 py-1 bg-slate-700 rounded-full text-xs text-slate-300 border border-slate-600">#{tag}</span>
                            ))}
                            {entity.tags.length === 0 && <span className="text-slate-600 text-sm italic">No tags.</span>}
                        </div>
@@ -151,8 +157,9 @@ const EntityModal: React.FC<EntityModalProps> = ({ entityId, onClose }) => {
                </div>
 
                 {entity.metadata && !isEditing && (
-                    <div className="bg-slate-900/50 p-4 rounded-lg text-sm text-slate-400 mt-auto">
-                        <pre>{JSON.stringify(entity.metadata, null, 2)}</pre>
+                    <div className="bg-slate-900/50 p-4 rounded-lg text-sm text-slate-400 mt-auto border border-slate-700/50">
+                        <h4 className="text-xs uppercase font-bold mb-1 opacity-50">Metadata</h4>
+                        <pre className="whitespace-pre-wrap font-mono text-xs">{JSON.stringify(entity.metadata, null, 2)}</pre>
                     </div>
                 )}
            </div>
@@ -165,7 +172,7 @@ const EntityModal: React.FC<EntityModalProps> = ({ entityId, onClose }) => {
             </h3>
             
             <div className="flex-1 overflow-y-auto space-y-3 mb-6 pr-2 custom-scrollbar">
-                {relatedEntities.length === 0 && <p className="text-slate-500 italic text-sm">No connections yet.</p>}
+                {relatedEntities.length === 0 && <p className="text-slate-500 italic text-sm text-center py-4">No connections yet.<br/>Search below to link assets.</p>}
                 {relatedEntities.map(rel => (
                     <div key={rel.id} className="group flex items-center gap-3 p-2 bg-slate-800 rounded border border-slate-700 hover:border-blue-500 transition-colors cursor-pointer relative">
                         <div className="text-slate-400">{getIcon(rel.type)}</div>
@@ -176,6 +183,7 @@ const EntityModal: React.FC<EntityModalProps> = ({ entityId, onClose }) => {
                         <button 
                             onClick={(e) => { e.stopPropagation(); linkEntities(entity.id, rel.id); }} // toggle link (removes if exists)
                             className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 p-1 hover:bg-red-500/20 text-red-400 rounded transition-all"
+                            title="Remove connection"
                         >
                             <X size={14} />
                         </button>
@@ -184,15 +192,18 @@ const EntityModal: React.FC<EntityModalProps> = ({ entityId, onClose }) => {
             </div>
 
             <div className="border-t border-slate-700 pt-4">
-                <h4 className="text-sm font-bold text-slate-400 mb-2">Add Connection</h4>
-                <input 
-                    type="text" 
-                    placeholder="Search to link..." 
-                    className="w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 text-sm text-white mb-2 focus:ring-2 focus:ring-blue-500 outline-none"
-                    value={linkSearch}
-                    onChange={(e) => setLinkSearch(e.target.value)}
-                />
-                <div className="max-h-32 overflow-y-auto space-y-1 custom-scrollbar">
+                <h4 className="text-sm font-bold text-slate-400 mb-2">Link to other Assets</h4>
+                <div className="relative">
+                    <input 
+                        type="text" 
+                        placeholder="Search assets..." 
+                        className="w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 text-sm text-white mb-2 focus:ring-2 focus:ring-blue-500 outline-none pl-8"
+                        value={linkSearch}
+                        onChange={(e) => setLinkSearch(e.target.value)}
+                    />
+                    <Plus className="absolute left-2.5 top-2.5 text-slate-500" size={14} />
+                </div>
+                <div className="max-h-40 overflow-y-auto space-y-1 custom-scrollbar">
                     {linkSearch && potentialLinks.map(target => (
                         <button 
                             key={target.id}
@@ -200,15 +211,15 @@ const EntityModal: React.FC<EntityModalProps> = ({ entityId, onClose }) => {
                                 linkEntities(entity.id, target.id);
                                 setLinkSearch('');
                             }}
-                            className="w-full text-left px-2 py-1 text-xs text-slate-300 hover:bg-slate-700 rounded flex justify-between items-center group"
+                            className="w-full text-left px-2 py-1.5 text-xs text-slate-300 hover:bg-slate-700 rounded flex justify-between items-center group transition-colors"
                         >
                             <span className="truncate flex-1">{target.title}</span>
-                            <span className="opacity-50 text-[10px] bg-slate-800 px-1 rounded ml-2">{target.type}</span>
-                            <PlusIcon className="opacity-0 group-hover:opacity-100 ml-1 text-blue-400" size={12} />
+                            <span className="opacity-50 text-[10px] bg-slate-800 px-1 rounded ml-2 border border-slate-700">{target.type}</span>
+                            <Plus size={12} className="opacity-0 group-hover:opacity-100 ml-1 text-blue-400" />
                         </button>
                     ))}
                     {linkSearch && potentialLinks.length === 0 && (
-                        <div className="text-xs text-slate-500 italic p-1">No matches found.</div>
+                        <div className="text-xs text-slate-500 italic p-1 text-center">No matches found.</div>
                     )}
                 </div>
             </div>
@@ -218,9 +229,5 @@ const EntityModal: React.FC<EntityModalProps> = ({ entityId, onClose }) => {
     </div>
   );
 };
-
-const PlusIcon = ({size, className}: {size: number, className?: string}) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-);
 
 export default EntityModal;

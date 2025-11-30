@@ -1,5 +1,7 @@
 import { GoogleGenAI, Type } from "@google/genai";
 
+// Check if API Key exists. In a Vite env, it might be import.meta.env.VITE_API_KEY
+// For this environment, we stick to process.env.API_KEY as per instructions.
 export const isAiEnabled = (): boolean => {
   return !!process.env.API_KEY;
 };
@@ -33,30 +35,23 @@ export const analyzeImageForTags = async (base64Image: string): Promise<{ title:
             }
           },
           {
-            text: "Analyze this image. Provide a concise title, a list of 5-8 relevant searchable tags, and a short visual description. Return as JSON."
+            text: "Analyze this image. Provide a concise title, a list of 5-8 relevant searchable tags, and a short visual description. Return the result as a JSON object with keys: title, tags, description."
           }
         ]
       },
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            title: { type: Type.STRING },
-            tags: { type: Type.ARRAY, items: { type: Type.STRING } },
-            description: { type: Type.STRING }
-          }
-        }
-      }
+      // Note: gemini-2.5-flash-image (nano banana) does not support responseSchema/responseMimeType
     });
 
     if (response.text) {
-      return JSON.parse(response.text);
+      let jsonStr = response.text.trim();
+      // Clean up markdown code blocks if present
+      jsonStr = jsonStr.replace(/^```json\s*/, '').replace(/^```\s*/, '').replace(/\s*```$/, '');
+      return JSON.parse(jsonStr);
     }
     throw new Error("No text returned from API");
   } catch (error) {
     console.error("Gemini Analysis Failed:", error);
-    // Return empty fallback instead of crashing
+    // Return empty fallback instead of crashing, allowing manual entry
     return { title: "", tags: [], description: "" };
   }
 };
